@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Air Quality Index</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      margin: 0; padding: 0;
+      display: flex; justify-content: center; align-items: center;
+      height: 100vh; background-color: #f0f4f8;
+    }
+    .container {
+      width: 100%; max-width: 600px;
+      padding: 30px; background: #fff;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      border-radius: 12px; text-align: center;
+    }
+    h1 { margin-bottom: 20px; color: #333; }
+    input, button {
+      width: 100%; padding: 12px; font-size: 1rem;
+      border-radius: 6px; border: 1px solid #ccc;
+    }
+    input:focus { outline: none; border-color: #007bff; }
+    button {
+      margin-top: 10px; background: #007bff; color: #fff;
+      border: none; cursor: pointer; transition: background .3s;
+    }
+    button:hover { background: #0056b3; }
+    .loading, .error { margin-top: 20px; font-weight: 500; }
+    .loading { color: #007bff; }
+    .error { color: red; }
+    .result { margin-top: 20px; text-align: left; display: none; }
+    .result p { margin: 8px 0; }
+    .aqi-good { color: green; }
+    .aqi-moderate { color: orange; }
+    .aqi-unhealthy { color: red; }
+    .aqi-very-poor { color: darkred; }
+    .aqi-unknown { color: gray; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Air Quality Index</h1>
+    <input id="city" list="cityList" placeholder="Start typing a city..." autocomplete="off" />
+    <datalist id="cityList"></datalist>
+    <button id="check">Check AQI</button>
+
+    <div id="loading" class="loading" style="display:none;">Fetching data…</div>
+    <div id="error" class="error"></div>
+    <div id="result" class="result"></div>
+  </div>
+
+  <script>
+    const cityInput = document.getElementById('city');
+    const dataList   = document.getElementById('cityList');
+    const loading    = document.getElementById('loading');
+    const errorDiv   = document.getElementById('error');
+    const resultDiv  = document.getElementById('result');
+    const btn        = document.getElementById('check');
+    const OPENWEATHER_KEY = '2216c54823059f94740880afced6a436'; // your OpenWeather API key
+
+    let debounce;
+    cityInput.addEventListener('input', () => {
+      clearTimeout(debounce);
+      const q = cityInput.value.trim();
+      dataList.innerHTML = '';
+      if (q.length < 2) return;
+      debounce = setTimeout(fetchCitySuggestions, 300, q);
+    });
+
+    async function fetchCitySuggestions(q) {
+      // free, no-key geocoding API :contentReference[oaicite:1]{index=1}
+      const url = https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.results) {
+          data.results.forEach(loc => {
+            const opt = document.createElement('option');
+            opt.value = ${loc.name}, ${loc.country};
+            opt.dataset.lat = loc.latitude;
+            opt.dataset.lon = loc.longitude;
+            dataList.appendChild(opt);
+          });
+        }
+      } catch (e) {
+        // silently fail suggestions
+      }
+    }
+
+    btn.addEventListener('click', getAirQuality);
+
+    async function getAirQuality() {
+      const city = cityInput.value.trim();
+      errorDiv.textContent = '';
+      resultDiv.style.display = 'none';
+      if (!city) {
+        errorDiv.textContent = 'Please enter a city name.';
+        return;
+      }
+
+      loading.style.display = 'block';
+
+      // find lat/lon from datalist option if user picked suggestion
+      let lat, lon;
+      const opts = Array.from(dataList.options);
+      const match = opts.find(o => o.value === city);
+      if (match) {
+        lat = match.dataset.lat;
+        lon = match.dataset.lon;
+      } else {
+        // fallback: fetch top result from Open-Meteo
+        try {
+          const geo = await fetch(
+            https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1
+          ).then(r => r.json());
+          if (!geo.results || !geo.results.length) throw 'no city';
+          lat = geo.results[0].latitude;
+          lon = geo.results[0].longitude;
+        } catch {
+          loading.style.display = 'none';
+          errorDiv.textContent = 'City not found. Please try again.';
+          return;
+        }
+      }
+
+      try {
+        // call OpenWeather Air Pollution API :contentReference[oaicite:2]{index=2}
+        const air = await fetch(
+          https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_KEY}
+        ).then(r => r.json());
+
+        const aqi = air.list[0].main.aqi;
+        const comp = air.list[0].components;
+        const labels = ['Good','Fair','Moderate','Poor','Very Poor'];
+        const category = labels[aqi-1] || 'Unknown';
+
+        let cls = 'aqi-unknown';
+        if (aqi===1) cls='aqi-good';
+        if (aqi===2) cls='aqi-moderate';
+        if (aqi===3) cls='aqi-unhealthy';
+        if (aqi>=4) cls='aqi-very-poor';
+
+        resultDiv.innerHTML = `
+          <h3>Air Quality in ${city}</h3>
+          <p class="${cls}"><strong>AQI:</strong> ${aqi} (${category})</p>
+          <p><strong>Pollutants:</strong></p>
+          <ul>
+            <li>PM2.5: ${comp.pm2_5} µg/m³</li>
+            <li>PM10: ${comp.pm10} µg/m³</li>
+            <li>CO: ${comp.co} µg/m³</li>
+            <li>NO₂: ${comp.no2} µg/m³</li>
+            <li>SO₂: ${comp.so2} µg/m³</li>
+            <li>O₃: ${comp.o3} µg/m³</li>
+          </ul>
+        `;
+        resultDiv.style.display = 'block';
+      } catch (err) {
+        errorDiv.textContent = 'Failed to retrieve AQI data. Please try again later.';
+      } finally {
+        loading.style.display = 'none';
+      }
+    }
+  </script>
+
+</body>
+</html>
