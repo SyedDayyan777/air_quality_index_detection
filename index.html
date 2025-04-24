@@ -6,6 +6,46 @@
   <title>Air Quality Index</title>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
   <style>
+
+    /* ... existing styles above ... */
+
+.result .aqi-bar {
+  margin: 15px 0;
+  background: #ddd;
+  height: 20px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.result .aqi-bar-fill {
+  height: 100%;
+  transition: width 0.5s ease;
+}
+.tooltip {
+  position: relative;
+  cursor: help;
+  border-bottom: 1px dashed #555;
+}
+.tooltip:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  padding: 5px 8px;
+  font-size: 0.8rem;
+  border-radius: 5px;
+  top: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+#reset {
+  margin-top: 10px;
+  background: #6c757d;
+}
+#reset:hover {
+  background: #495057;
+}
+
     body {
   font-family: 'Roboto', sans-serif;
   margin: 0;
@@ -111,6 +151,21 @@
         errorDiv.textContent = 'Please enter a city name.';
         return;
       }
+
+      const resetBtn = document.createElement('button');
+resetBtn.id = 'reset';
+resetBtn.textContent = 'Reset';
+resetBtn.style.display = 'none';
+btn.insertAdjacentElement('afterend', resetBtn);
+
+resetBtn.addEventListener('click', () => {
+  cityInput.value = '';
+  dataList.innerHTML = '';
+  resultDiv.style.display = 'none';
+  resetBtn.style.display = 'none';
+  errorDiv.textContent = '';
+});
+
 
       loading.style.display = 'block';
 
